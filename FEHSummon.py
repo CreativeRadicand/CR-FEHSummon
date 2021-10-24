@@ -36,8 +36,11 @@
 
 # V 0.4 - Coming soon
 # The idea here is to add pity rates, and either calculate the sums and the variances, or we add a graph. This might be harder, unfortunately, but we can learn it.
+# To calculate pity rates, we want to count the number of non-focus or non 5-star units that we have.
+# We then need to alter the pull rates, so we want to make a function for this.
 
 import random
+import math
 
 # We will have the following dictionaries. Not sure how much it's needed, but we might as well.
 
@@ -93,6 +96,33 @@ bannertype_dict = {
     4: "Double Special",
     5: "Legendary Remix"  
 }
+
+def newPullRate(count, bannertype):
+    #Given a pity count, and the base list (which might be an actual list or just the original value where we extract pullrate from)
+    #We spit out a new list for the correct values.
+    #First, we do the simplest one:
+    start = [0, 0, 0, 0, 0, 0]
+    finish = [0, 0, 0, 0, 0, 0]
+    total_5star_increase = 0
+    if count >= 120:
+        finish[0] = 100 * pullrate_dict[bannertype][0] / partialSum(pullrate_dict[bannertype], 1)
+        finish[1] = 100 * pullrate_dict[bannertype][1] / partialSum(pullrate_dict[bannertype], 1)
+        finish[2] = 0
+        finish[3] = 0
+        finish[4] = 0
+        finish[5] = 0
+    else:
+        total_5star_increase = math.floor(count/5.0) * 0.5
+        finish[0] = (partialSum(pullrate_dict[bannertype], 1) + total_5star_increase) * pullrate_dict[bannertype][0] / partialSum(pullrate_dict[bannertype], 1)
+        finish[1] = (partialSum(pullrate_dict[bannertype], 1) + total_5star_increase) * pullrate_dict[bannertype][1] / partialSum(pullrate_dict[bannertype], 1)
+        finish[2] = (100 - partialSum(pullrate_dict[bannertype], 1) - total_5star_increase) * pullrate_dict[bannertype][2] / (100 - partialSum(pullrate_dict[bannertype], 1))
+        finish[3] = (100 - partialSum(pullrate_dict[bannertype], 1) - total_5star_increase) * pullrate_dict[bannertype][3] / (100 - partialSum(pullrate_dict[bannertype], 1))
+        finish[4] = (100 - partialSum(pullrate_dict[bannertype], 1) - total_5star_increase) * pullrate_dict[bannertype][4] / (100 - partialSum(pullrate_dict[bannertype], 1))
+        finish[5] = (100 - partialSum(pullrate_dict[bannertype], 1) - total_5star_increase) * pullrate_dict[bannertype][5] / (100 - partialSum(pullrate_dict[bannertype], 1))
+        print("Final Rates:" + str(finish))
+        print("Pullrate_dict: " + str(pullrate_dict[bannertype]))
+    return finish
+        
 
 
 def orbCost(summon):
@@ -153,15 +183,17 @@ def SummonCircle():
 def SummonSimulationResult(starting_orbs):
     #Takes an input of the orbs you have.
     orbs = starting_orbs
-
     focus_summoned = 0
-
+    pity_count = 0 # Fortunately the pity count resets at the end of each circle instead of each summon.
     # We then do summoning sessions while we can still do them
     while orbs >= 5:
         #We summon a circle:
+        print("The pity count is: " + str(pity_count))
+        pull_rate = newPullRate(pity_count, bannertype)
+        print(pull_rate);
         circle = SummonCircle();
-        #print(circle.color)
-        #print(circle.rarity)
+        print(circle.color)
+        print(circle.rarity)
         # We wanna check if we've summoned at least one before we leave. We also wanna keep a count of how many we summon in the session.
         summons = 0
         i = 0
@@ -175,22 +207,28 @@ def SummonSimulationResult(starting_orbs):
                 #or you're just wanting to summon so you can get out of the circle because there are none of the color you want.
                 while j <= 4 and (i == 0 or (i > 0 and summons == 0)) and orbs >= orbCost(summons):
                     if circle.color[j] == summon_order[i]:
-                        #print("Paying " + str(orbCost(summons)) + " to summon the " + str(j+1) + "th orb.")
-                        #print("It's a " + rarity_dict[circle.rarity[j]])
+                        print("Paying " + str(orbCost(summons)) + " to summon the " + str(j+1) + "th orb.")
+                        print("It's a " + rarity_dict[circle.rarity[j]])
                         orbs -= orbCost(summons)
                         summons += 1
-                        if circle.rarity[j] == 0 and summon_order[0] == circle.color[j]:
+                        if circle.rarity[j] == 0 and summon_order[0] == circle.color[j]: #This is a 5 - star focus unit.
                             # V 0.3: We roll the dice if the color we summoned is the actual unit we want:
+                            pity_count = 0
                             targetcheck = random.randint(1, char_pool[0][summon_order[0]])
                             if targetcheck == 1:
                                 focus_summoned += 1
-                                #print("It's the target character!")
-                        if circle.rarity[j] == 2 and summon_order[0] == circle.color[j] and target_is_fourstar: #This is the check for the four-star. Only do this if the target is also a four-star focus.
+                                print("It's the target character!")
+                        elif circle.rarity[j] == 1:
+                            pity_count -= 20 #Setting it to zero was the old version of the pity rate, but I believe it usually reduces it by 1%, so that's minus 20.
+                        elif circle.rarity[j] == 2 and summon_order[0] == circle.color[j] and target_is_fourstar: #This is a 4 - star focus unit.
                             # V 0.3: We roll the dice if the color we summoned is the actual unit we want:
+                            pity_count += 1
                             targetcheck = random.randint(1, char_pool[2][summon_order[0]])
                             if targetcheck == 1:
                                 focus_summoned += 1
-                                #print("It's the target character!")
+                                print("It's the target character!")
+                        else:
+                            pity_count += 1
                         
                     j += 1
                 i += 1
@@ -298,8 +336,8 @@ i = 1
 full_results = []
 while i <= 1:
     full_results.append(SummonSimulationResult(300))
-    i += 1
     print("Simulation number: " + str(i))
+    i += 1
     
 full_results.sort()
 print(full_results)
